@@ -2,30 +2,44 @@ import { createClient } from "@/lib/supabase/server"
 import { VotingInterface } from "@/components/voting-interface"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 export default async function HomePage() {
   const supabase = await createClient()
 
-  // Fetch projects with vote counts
-  const { data: projects, error } = await supabase
-    .from("projects")
-    .select(`
-      *,
-      votes(count)
-    `)
-    .order("created_at", { ascending: true })
+  let projects = []
+  let databaseError = false
 
-  if (error) {
-    console.error("Error fetching projects:", error)
-    return <div>Error loading projects</div>
+  try {
+    // Fetch projects with vote counts
+    const { data, error } = await supabase
+      .from("projects")
+      .select(`
+        *,
+        votes(count)
+      `)
+      .order("created_at", { ascending: true })
+
+    if (error) {
+      console.error("Error fetching projects:", error.message)
+      // Check if it's a table not found error
+      if (error.message.includes("Could not find the table")) {
+        databaseError = true
+      } else {
+        throw error
+      }
+    } else {
+      // Transform data to include vote counts
+      projects =
+        data?.map((project) => ({
+          ...project,
+          vote_count: project.votes?.[0]?.count || 0,
+        })) || []
+    }
+  } catch (error) {
+    console.error("Database error:", error)
+    databaseError = true
   }
-
-  // Transform data to include vote counts
-  const projectsWithVotes =
-    projects?.map((project) => ({
-      ...project,
-      vote_count: project.votes?.[0]?.count || 0,
-    })) || []
 
   return (
     <div className="min-h-screen bg-background grid-pattern">
@@ -42,7 +56,27 @@ export default async function HomePage() {
           </p>
         </div>
 
-        <VotingInterface projects={projectsWithVotes} />
+        {databaseError ? (
+          <div className="max-w-2xl mx-auto">
+            <Alert className="mb-8">
+              <AlertDescription className="text-center">
+                <div className="mb-4">
+                  <h3 className="text-lg font-semibold mb-2">Database Setup Required</h3>
+                  <p className="text-muted-foreground mb-4">
+                    The voting platform database needs to be initialized. Please run the setup script to create the
+                    required tables.
+                  </p>
+                </div>
+                <div className="bg-muted p-4 rounded-lg text-left">
+                  <p className="font-mono text-sm mb-2">Run this script in your Supabase project:</p>
+                  <code className="text-xs bg-background p-2 rounded block">scripts/001_create_tables.sql</code>
+                </div>
+              </AlertDescription>
+            </Alert>
+          </div>
+        ) : (
+          <VotingInterface projects={projects} />
+        )}
       </main>
       <Footer />
     </div>
