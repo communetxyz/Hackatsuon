@@ -71,7 +71,7 @@ export function VotingInterface({ projects: initialProjects }: VotingInterfacePr
 
         toast({
           title: "🎉 Vote submitted successfully!",
-          description: "Thank you for participating in Kesennuma Hackatsuon 2025. Your voice matters!",
+          description: "Your coupon code is ready! Check below for your discount.",
           className: "bg-green-50 border-green-200 text-green-800",
         })
 
@@ -207,9 +207,9 @@ export function VotingInterface({ projects: initialProjects }: VotingInterfacePr
       {showCouponForm && (
         <Card className="max-w-md mx-auto bg-gradient-to-br from-green-50 to-blue-50 border-green-200 shadow-lg">
           <CardHeader className="text-center">
-            <CardTitle className="text-green-800">🎉 Thank You for Voting!</CardTitle>
+            <CardTitle className="text-green-800">🎉 Here's Your Coupon Code!</CardTitle>
             <CardDescription className="text-green-700">
-              Here's your exclusive discount coupon for local Kesennuma businesses
+              Your exclusive discount for local Kesennuma businesses
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">

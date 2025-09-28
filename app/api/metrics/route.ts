@@ -5,15 +5,19 @@ export async function GET() {
   try {
     const supabase = await createClient()
 
+    console.log("[v0] Starting metrics API call")
+
     // Get total vote count
     const { count: totalVotes, error: votesError } = await supabase
       .from("votes")
       .select("*", { count: "exact", head: true })
 
     if (votesError) {
-      console.error("Error fetching vote count:", votesError)
-      return NextResponse.json({ error: "Failed to fetch metrics" }, { status: 500 })
+      console.error("[v0] Error fetching vote count:", votesError)
+      return NextResponse.json({ error: "Failed to fetch vote metrics" }, { status: 500 })
     }
+
+    console.log("[v0] Total votes:", totalVotes)
 
     // Get total email registrations
     const { count: totalEmails, error: emailsError } = await supabase
@@ -21,33 +25,40 @@ export async function GET() {
       .select("*", { count: "exact", head: true })
 
     if (emailsError) {
-      console.error("Error fetching email count:", emailsError)
-      return NextResponse.json({ error: "Failed to fetch metrics" }, { status: 500 })
+      console.error("[v0] Error fetching email count:", emailsError)
+      return NextResponse.json({ error: "Failed to fetch email metrics" }, { status: 500 })
     }
 
-    // Get project vote counts
-    const { data: projectVotes, error: projectError } = await supabase
+    console.log("[v0] Total emails:", totalEmails)
+
+    const { data: projects, error: projectError } = await supabase
       .from("projects")
-      .select(`
-        id,
-        title,
-        team_name,
-        category,
-        votes(count)
-      `)
+      .select("id, title, team_name, category")
       .order("created_at", { ascending: true })
 
     if (projectError) {
-      console.error("Error fetching project votes:", projectError)
-      return NextResponse.json({ error: "Failed to fetch metrics" }, { status: 500 })
+      console.error("[v0] Error fetching projects:", projectError)
+      return NextResponse.json({ error: "Failed to fetch project data" }, { status: 500 })
     }
 
-    // Transform project data
-    const projectsWithVotes =
-      projectVotes?.map((project) => ({
-        ...project,
-        vote_count: project.votes?.[0]?.count || 0,
-      })) || []
+    console.log("[v0] Projects fetched:", projects?.length)
+
+    const projectsWithVotes = []
+    for (const project of projects || []) {
+      const { count: voteCount, error: voteCountError } = await supabase
+        .from("votes")
+        .select("*", { count: "exact", head: true })
+        .eq("project_id", project.id)
+
+      if (voteCountError) {
+        console.error(`[v0] Error fetching votes for project ${project.id}:`, voteCountError)
+        projectsWithVotes.push({ ...project, vote_count: 0 })
+      } else {
+        projectsWithVotes.push({ ...project, vote_count: voteCount || 0 })
+      }
+    }
+
+    console.log("[v0] Projects with vote counts:", projectsWithVotes.length)
 
     // Get votes by category
     const categoryVotes = projectsWithVotes.reduce(
@@ -66,18 +77,24 @@ export async function GET() {
       .gte("created_at", twentyFourHoursAgo)
 
     if (recentError) {
-      console.error("Error fetching recent votes:", recentError)
+      console.error("[v0] Error fetching recent votes:", recentError)
     }
 
-    return NextResponse.json({
+    console.log("[v0] Recent votes:", recentVotes)
+
+    const result = {
       totalVotes: totalVotes || 0,
       totalEmails: totalEmails || 0,
       recentVotes: recentVotes || 0,
       projects: projectsWithVotes,
       categoryVotes,
-    })
+    }
+
+    console.log("[v0] Returning metrics result:", result)
+
+    return NextResponse.json(result)
   } catch (error) {
-    console.error("Error in metrics API:", error)
+    console.error("[v0] Error in metrics API:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

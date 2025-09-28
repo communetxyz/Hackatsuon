@@ -129,15 +129,15 @@ export function ProjectCard({ project, onVote }: ProjectCardProps) {
           {isVoting ? (
             <>
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-              Voting...
+              Getting your coupon...
             </>
           ) : justVoted ? (
             <>
               <Check className="w-4 h-4 mr-2" />
-              Vote Submitted!
+              Coupon Ready!
             </>
           ) : (
-            "Vote for this project"
+            "Vote & Get Coupon Code"
           )}
         </Button>
       </CardContent>
