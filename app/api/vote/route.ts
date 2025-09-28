@@ -11,38 +11,11 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createClient()
 
-    // Get client IP address for duplicate prevention
+    // Get client IP address for tracking (but not duplicate prevention)
     const forwarded = request.headers.get("x-forwarded-for")
     const ip = forwarded ? forwarded.split(",")[0] : request.headers.get("x-real-ip") || "unknown"
 
     try {
-      // Check if this IP has already voted for this project
-      const { data: existingVote, error: checkError } = await supabase
-        .from("votes")
-        .select("id")
-        .eq("project_id", projectId)
-        .eq("voter_ip", ip)
-        .single()
-
-      if (checkError && checkError.code !== "PGRST116") {
-        // PGRST116 is "not found" which is expected for new votes
-        // Check if it's a table not found error
-        if (checkError.message?.includes("Could not find the table")) {
-          return NextResponse.json(
-            {
-              error: "Database not initialized. Please run the setup script first.",
-            },
-            { status: 503 },
-          )
-        }
-        console.error("Error checking existing vote:", checkError)
-        return NextResponse.json({ error: "Database error" }, { status: 500 })
-      }
-
-      if (existingVote) {
-        return NextResponse.json({ error: "You have already voted for this project" }, { status: 409 })
-      }
-
       // Verify project exists
       const { data: project, error: projectError } = await supabase
         .from("projects")
@@ -66,7 +39,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Project not found" }, { status: 404 })
       }
 
-      // Insert the vote
+      // Insert the vote (IP is recorded but duplicates are allowed)
       const { error: insertError } = await supabase.from("votes").insert({
         project_id: projectId,
         voter_ip: ip,
