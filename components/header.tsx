@@ -17,7 +17,7 @@ export function Header() {
             <Link href="/" className="text-foreground hover:text-primary transition-colors">
               Vote
             </Link>
-            <Link href="/metrics" className="text-muted-foreground hover:text-primary transition-colors">
+            <Link href="/results" className="text-muted-foreground hover:text-primary transition-colors">
               Results
             </Link>
             <Link href="/about" className="text-muted-foreground hover:text-primary transition-colors">
@@ -27,7 +27,7 @@ export function Header() {
 
           <div className="flex items-center space-x-2">
             <Button variant="outline" size="sm" asChild>
-              <Link href="/metrics">View Results</Link>
+              <Link href="/results">View Results</Link>
             </Button>
           </div>
         </div>
