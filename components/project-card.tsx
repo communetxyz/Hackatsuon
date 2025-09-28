@@ -4,7 +4,7 @@ import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ExternalLink, Github, Heart } from "lucide-react"
+import { ExternalLink, Github, Heart, Check } from "lucide-react"
 import Image from "next/image"
 
 interface Project {
@@ -26,11 +26,14 @@ interface ProjectCardProps {
 
 export function ProjectCard({ project, onVote }: ProjectCardProps) {
   const [isVoting, setIsVoting] = useState(false)
+  const [justVoted, setJustVoted] = useState(false)
 
   const handleVote = async () => {
     setIsVoting(true)
     await onVote(project.id)
     setIsVoting(false)
+    setJustVoted(true)
+    setTimeout(() => setJustVoted(false), 3000) // Reset after 3 seconds
   }
 
   const getCategoryColor = (category: string) => {
@@ -47,13 +50,25 @@ export function ProjectCard({ project, onVote }: ProjectCardProps) {
   }
 
   return (
-    <Card className="group hover:shadow-lg hover:shadow-primary/10 transition-all duration-300 bg-card/50 backdrop-blur-sm border-border/50">
+    <Card
+      className={`group hover:shadow-lg hover:shadow-primary/10 transition-all duration-300 bg-card/50 backdrop-blur-sm border-border/50 ${
+        justVoted ? "ring-2 ring-green-500/50 shadow-lg shadow-green-500/20 animate-pulse" : ""
+      }`}
+    >
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
           <Badge className={`${getCategoryColor(project.category)} border`}>{project.category}</Badge>
-          <div className="flex items-center gap-1 text-sm text-muted-foreground">
-            <Heart className="w-4 h-4" />
-            <span>{project.vote_count}</span>
+          <div
+            className={`flex items-center gap-1 text-sm transition-colors duration-300 ${
+              justVoted ? "text-green-400" : "text-muted-foreground"
+            }`}
+          >
+            <Heart
+              className={`w-4 h-4 transition-all duration-300 ${
+                justVoted ? "fill-green-400 text-green-400 scale-110" : ""
+              }`}
+            />
+            <span className={justVoted ? "font-semibold" : ""}>{project.vote_count}</span>
           </div>
         </div>
 
@@ -65,6 +80,13 @@ export function ProjectCard({ project, onVote }: ProjectCardProps) {
               fill
               className="object-cover group-hover:scale-105 transition-transform duration-300"
             />
+            {justVoted && (
+              <div className="absolute inset-0 bg-green-500/20 flex items-center justify-center animate-fade-in">
+                <div className="bg-green-500 rounded-full p-3 animate-bounce">
+                  <Check className="w-6 h-6 text-white" />
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -96,8 +118,27 @@ export function ProjectCard({ project, onVote }: ProjectCardProps) {
           )}
         </div>
 
-        <Button onClick={handleVote} disabled={isVoting} className="w-full" size="sm">
-          {isVoting ? "Voting..." : "Vote for this project"}
+        <Button
+          onClick={handleVote}
+          disabled={isVoting}
+          className={`w-full transition-all duration-300 ${
+            justVoted ? "bg-green-600 hover:bg-green-700 text-white" : ""
+          }`}
+          size="sm"
+        >
+          {isVoting ? (
+            <>
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+              Voting...
+            </>
+          ) : justVoted ? (
+            <>
+              <Check className="w-4 h-4 mr-2" />
+              Vote Submitted!
+            </>
+          ) : (
+            "Vote for this project"
+          )}
         </Button>
       </CardContent>
     </Card>
