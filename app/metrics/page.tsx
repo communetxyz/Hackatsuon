@@ -25,23 +25,25 @@ export default async function MetricsPage() {
       // Get total email registrations
       const { count: totalEmails } = await supabase.from("coupon_emails").select("*", { count: "exact", head: true })
 
-      // Get project vote counts
-      const { data: projectVotes } = await supabase
+      // Get projects first
+      const { data: projects } = await supabase
         .from("projects")
-        .select(`
-          id,
-          title,
-          team_name,
-          category,
-          votes(count)
-        `)
+        .select("id, title, team_name, category")
         .order("created_at", { ascending: true })
 
-      const projectsWithVotes =
-        projectVotes?.map((project) => ({
+      // Get vote counts for each project individually
+      const projectsWithVotes = []
+      for (const project of projects || []) {
+        const { count: voteCount } = await supabase
+          .from("votes")
+          .select("*", { count: "exact", head: true })
+          .eq("project_id", project.id)
+
+        projectsWithVotes.push({
           ...project,
-          vote_count: project.votes?.[0]?.count || 0,
-        })) || []
+          vote_count: voteCount || 0,
+        })
+      }
 
       const categoryVotes = projectsWithVotes.reduce(
         (acc, project) => {
