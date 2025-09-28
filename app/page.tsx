@@ -11,30 +11,38 @@ export default async function HomePage() {
   let databaseError = false
 
   try {
-    // Fetch projects with vote counts
-    const { data, error } = await supabase
+    // First fetch all projects
+    const { data: projectsData, error: projectsError } = await supabase
       .from("projects")
-      .select(`
-        *,
-        votes(count)
-      `)
+      .select("*")
       .order("created_at", { ascending: true })
 
-    if (error) {
-      console.error("Error fetching projects:", error.message)
-      // Check if it's a table not found error
-      if (error.message.includes("Could not find the table")) {
+    if (projectsError) {
+      console.error("Error fetching projects:", projectsError.message)
+      if (projectsError.message.includes("Could not find the table")) {
         databaseError = true
       } else {
-        throw error
+        throw projectsError
       }
-    } else {
-      // Transform data to include vote counts
-      projects =
-        data?.map((project) => ({
-          ...project,
-          vote_count: project.votes?.[0]?.count || 0,
-        })) || []
+    } else if (projectsData) {
+      // Then fetch vote counts for each project separately
+      const projectsWithVotes = await Promise.all(
+        projectsData.map(async (project) => {
+          const { count, error: voteError } = await supabase
+            .from("votes")
+            .select("*", { count: "exact", head: true })
+            .eq("project_id", project.id)
+
+          if (voteError) {
+            console.error(`Error fetching votes for project ${project.id}:`, voteError)
+            return { ...project, vote_count: 0 }
+          }
+
+          return { ...project, vote_count: count || 0 }
+        }),
+      )
+
+      projects = projectsWithVotes
     }
   } catch (error) {
     console.error("Database error:", error)
