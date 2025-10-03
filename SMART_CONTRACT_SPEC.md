@@ -47,11 +47,10 @@ The current Kesennuma Hackathon voting system relies on centralized infrastructu
 | Technical Functionality | Value | Tradeoffs |
 |------------------------|-------|-----------|
 | On-chain voting records | Complete transparency and immutability | Gas costs per vote |
-| NFT-based voter badges | Proof of participation and potential future benefits | Minting costs |
-| Winner NFT trophy | Permanent on-chain recognition for winning team | One-time minting cost |
 | Two votes per address | More nuanced preference expression | Slightly higher complexity |
 | On-chain resolution | Trustless winner determination | Gas cost for resolution |
 | Single view function | All frontend data in one call | Larger response payload |
+| Gnosis Chain deployment | Low gas costs and fast finality | Smaller ecosystem than Ethereum mainnet |
 
 ### Alternative Approaches
 
@@ -123,10 +122,9 @@ The current Kesennuma Hackathon voting system relies on centralized infrastructu
 4. **System** executes:
    - Determines project with highest vote count
    - Marks voting as resolved
-   - Mints Winner NFT to winning team's address
+   - Stores winner project ID
    - Emits `VotingResolved` event
-   - Emits `WinnerNFTMinted` event
-5. **Post-condition**: Winner determined and NFT minted
+5. **Post-condition**: Winner determined and stored on-chain
 
 ### 4.2 Alternate / Error Paths
 
@@ -139,7 +137,6 @@ The current Kesennuma Hackathon voting system relies on centralized infrastructu
 | A5 | Insufficient gas | Transaction fails | Estimate gas and warn user |
 | A6 | Admin action by non-admin | Revert with "Unauthorized" | Hide admin functions from UI |
 | A7 | Resolve with no votes | Revert with "NoVotesCast" | Ensure votes exist before resolution |
-| A8 | Tie in vote count | Use first registered project | Document tiebreaker rules |
 
 ## 5. UML Diagrams
 
@@ -188,15 +185,6 @@ classDiagram
         +CategoryStats[] categoryVotes
     }
     
-    class WinnerNFT {
-        +uint256 tokenId
-        +uint256 projectId
-        +string teamName
-        +uint256 voteCount
-        +uint256 totalVoters
-        +string metadataURI
-    }
-    
     class Category {
         <<enumeration>>
         AI
@@ -208,7 +196,6 @@ classDiagram
     HackathonVoting --> Project : manages
     HackathonVoting --> Vote : records
     HackathonVoting --> VotingData : returns
-    HackathonVoting --> WinnerNFT : mints
     Project --> Category : categorized by
 ```
 
@@ -241,22 +228,11 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant User
-    participant Frontend
     participant Wallet
     participant Contract
     participant Blockchain
-    
-    User->>Frontend: Open voting page
-    Frontend->>Contract: Call getVotingData(userAddress)
-    Contract-->>Frontend: Return all voting data
-    Frontend->>Frontend: Display projects & stats
-    Frontend->>Frontend: Show user's vote history
-    User->>Frontend: Browse projects
-    User->>Frontend: Select project to vote
-    Frontend->>Wallet: Connect/Check wallet
-    Wallet-->>Frontend: Return user address
-    Frontend->>Frontend: Check if already voted
-    Frontend->>Wallet: Request vote transaction
+
+    User->>Wallet: Select project to vote
     Wallet->>User: Show gas estimate
     User->>Wallet: Approve transaction
     Wallet->>Contract: Call vote(projectId)
@@ -268,22 +244,19 @@ sequenceDiagram
     Contract->>Contract: Update vote count
     Contract->>Contract: Update voter history
     Contract->>Blockchain: Emit VoteCast event
-    Blockchain-->>Frontend: Transaction receipt
-    Frontend->>Contract: Call getVotingData(userAddress)
-    Contract-->>Frontend: Return updated data
-    Frontend-->>User: Show updated UI with new vote
+    Blockchain-->>Wallet: Transaction receipt
+    Wallet-->>User: Show success confirmation
 ```
 
 
-#### Admin Flow: Resolving Votes and Minting Winner NFT
+#### Admin Flow: Resolving Votes
 ```mermaid
 sequenceDiagram
     participant Admin
     participant Wallet/Etherscan
     participant Contract
-    participant NFTContract
     participant Blockchain
-    
+
     Admin->>Wallet/Etherscan: Access contract interface
     Admin->>Wallet/Etherscan: Call resolveVoting()
     Wallet/Etherscan->>Admin: Show transaction preview
@@ -294,15 +267,11 @@ sequenceDiagram
     Contract->>Contract: Find highest vote count
     Contract->>Contract: Determine winner project
     Contract->>Contract: Mark voting as resolved
-    Contract->>NFTContract: Mint Winner NFT
-    NFTContract->>NFTContract: Create unique token
-    NFTContract->>NFTContract: Set metadata
-    NFTContract-->>Contract: NFT minted
+    Contract->>Contract: Store winner project ID
     Contract->>Blockchain: Emit VotingResolved event
-    Contract->>Blockchain: Emit WinnerNFTMinted event
     Blockchain-->>Wallet/Etherscan: Transaction receipt
-    Wallet/Etherscan-->>Admin: Show winner & NFT details
-    
+    Wallet/Etherscan-->>Admin: Show winner details
+
     Note over Admin: Voting is now permanently closed
 ```
 
@@ -318,7 +287,7 @@ stateDiagram
     Resolved --> [*] : Voting complete
     
     note right of Resolved
-        Winner NFT minted
+        Winner determined
         No more votes accepted
     end note
 ```
@@ -372,17 +341,7 @@ struct VotingData {
     CategoryStats[] categoryVotes; // Vote distribution by category
 }
 
-struct WinnerNFTData {
-    uint256 tokenId;
-    uint256 projectId;
-    string teamName;
-    uint256 finalVoteCount;
-    uint256 totalVoters;
-    string metadataURI;
-}
-
 function getVotingData(address viewer) external view returns (VotingData memory);
-function getWinnerNFT() external view returns (WinnerNFTData memory);
 ```
 
 **Benefits of Single View Function:**
@@ -415,50 +374,52 @@ function getMyVotes() external view returns (uint256[] memory);
 
 ## 6. Open Questions
 
-1. **Sybil Resistance Strategy**: 
-   - Should we implement proof-of-humanity, token-gating, or accept some level of manipulation?
-   - With 2 votes per address, sybil attacks become more impactful
+1. **Incentive Mechanism**:
+   - Should voters receive participation badges or POAPs?
+   - Any rewards for voting participation?
 
-2. **Winner NFT Details**:
-   - Should the NFT be transferable or soulbound?
-   - What metadata should be stored on-chain vs off-chain?
-   - Should team members each get an NFT or just one for the team?
+2. **Upgrade Strategy**:
+   - Use proxy pattern for upgradability or deploy immutable contract?
+   - Consider long-term maintenance needs
 
-3. **Tiebreaker Rules**:
-   - If multiple projects have the same highest vote count, how to determine winner?
-   - Current approach: first registered wins. Alternative: admin selection?
+3. **Project Metadata Storage**:
+   - Store all project data on-chain or use IPFS/off-chain storage?
+   - Balance between decentralization and gas costs
 
-4. **Incentive Mechanism**:
-   - Should voters receive participation NFT badges?
-   - Could implement a POAP for voters
+## 7. Deployment & Technical Details
 
-5. **Chain Selection**:
-   - Ethereum L2 (Arbitrum/Optimism), Polygon, or local chain?
-   - Consider gas costs for voting and NFT minting
+### Target Chain: Gnosis Chain
+- **Network**: Gnosis Chain (formerly xDai)
+- **Benefits**:
+  - Low gas costs (typically < $0.01 per transaction)
+  - Fast block times (~5 seconds)
+  - EVM compatible - same tooling as Ethereum
+  - Established ecosystem with block explorers and infrastructure
+- **Native Token**: xDAI (stable token pegged to USD)
 
-6. **Vote Distribution Strategy**:
-   - Should voters be required to use both votes or can they use just one?
-   - Should both votes have equal weight?
+### Voting Rules
+- Each address can vote for up to 2 different projects
+- Voters are NOT required to use both votes (can vote for just 1 project)
+- Both votes have equal weight (1 vote = 1 vote)
+- Cannot vote twice for the same project
+- Votes cannot be changed once submitted
 
-## 7. Glossary / References
+## 8. Glossary / References
 
 **Terms:**
-- **Sybil Attack**: Creating multiple fake identities to manipulate voting
-- **Quadratic Voting**: Voting system where cost of additional votes increases quadratically
-- **Meta-transactions**: Transactions where gas is paid by a relayer, not the user
+- **Gnosis Chain**: EVM-compatible blockchain with low fees and fast finality
 - **IPFS**: InterPlanetary File System for decentralized storage
-- **NFT Badge**: Non-fungible token serving as proof of participation
+- **xDAI**: Stablecoin native to Gnosis Chain, pegged to USD
+- **POAP**: Proof of Attendance Protocol, NFT badges for participation
 
 **References:**
+- [Gnosis Chain Documentation](https://docs.gnosischain.com/)
 - [OpenZeppelin Contracts](https://docs.openzeppelin.com/contracts)
-- [Snapshot Voting](https://docs.snapshot.org/)
-- [Quadratic Voting Explained](https://vitalik.ca/general/2019/12/07/quadratic.html)
-- [EIP-712: Typed Data Signing](https://eips.ethereum.org/EIPS/eip-712)
+- [Gnosis Chain Block Explorer](https://gnosisscan.io/)
 - Current Implementation: `/scripts/001_create_tables.sql`
 
 **Recommended Smart Contract Architecture:**
-- Use OpenZeppelin's `AccessControl` for role management
-- Implement `Pausable` for emergency stops
+- Use OpenZeppelin's `Ownable` for admin management
 - Consider `ReentrancyGuard` for vote() function
 - Use events extensively for off-chain indexing
-- Implement EIP-712 for gasless voting (optional)
+- Deploy on Gnosis Chain for low transaction costs
